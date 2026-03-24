@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState, type SVGProps } from "react";
 import { Link, useNavigate, useParams } from "@/lib/router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  Agent,
+  AgentSkillSnapshot,
   CompanySkillCreateRequest,
   CompanySkillDetail,
   CompanySkillFileDetail,
@@ -11,11 +13,13 @@ import type {
   CompanySkillSourceBadge,
   CompanySkillUpdateStatus,
 } from "@paperclipai/shared";
+import { agentsApi } from "../api/agents";
 import { companySkillsApi } from "../api/companySkills";
 import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { useToast } from "../context/ToastContext";
 import { queryKeys } from "../lib/queryKeys";
+import { summarizeCuratedGstackSkills } from "../lib/curated-gstack-skills";
 import { EmptyState } from "../components/EmptyState";
 import { MarkdownBody } from "../components/MarkdownBody";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -732,6 +736,59 @@ function SkillPane({
   );
 }
 
+function CuratedGstackSkillsPanel({
+  loading,
+  skills,
+}: {
+  loading: boolean;
+  skills: ReturnType<typeof summarizeCuratedGstackSkills>;
+}) {
+  return (
+    <div className="mt-3 rounded-xl border border-border/80 bg-muted/30 px-3 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-medium">Enabled curated gstack skills</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Paperclip currently exposes only the enabled curated prototype bundle here, not the full upstream gstack catalog.
+          </p>
+        </div>
+        <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
+          Prototype
+        </span>
+      </div>
+
+      {loading ? (
+        <p className="mt-3 text-xs text-muted-foreground">Loading configured runtime skills...</p>
+      ) : skills.length === 0 ? (
+        <p className="mt-3 text-xs text-muted-foreground">No curated gstack skills are currently enabled for this company.</p>
+      ) : (
+        <div className="mt-3 space-y-2">
+          {skills.map((skill) => (
+            <div key={skill.key} className="rounded-lg border border-border/70 bg-background/80 px-3 py-2">
+              <div className="font-mono text-xs text-foreground">{skill.command}</div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Enabled on{" "}
+                {skill.agentNames.map((agentName, index) => (
+                  <span key={skill.agentIds[index]}>
+                    {index > 0 ? ", " : ""}
+                    <Link
+                      to={`/agents/${skill.agentUrlKeys[index]}/skills`}
+                      className="text-foreground no-underline hover:underline"
+                    >
+                      {agentName}
+                    </Link>
+                  </span>
+                ))}
+                .
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CompanySkills() {
   const { "*": routePath } = useParams<{ "*": string }>();
   const navigate = useNavigate();
@@ -767,6 +824,34 @@ export function CompanySkills() {
     queryFn: () => companySkillsApi.list(selectedCompanyId!),
     enabled: Boolean(selectedCompanyId),
   });
+  const agentsQuery = useQuery({
+    queryKey: queryKeys.agents.list(selectedCompanyId ?? ""),
+    queryFn: () => agentsApi.list(selectedCompanyId!),
+    enabled: Boolean(selectedCompanyId),
+  });
+  const agentsWithRunnableSkills = useMemo(
+    () =>
+      (agentsQuery.data ?? []).filter(
+        (agent: Agent) => agent.status !== "terminated" && agent.adapterType === "codex_local",
+      ),
+    [agentsQuery.data],
+  );
+  const agentSkillQueries = useQueries({
+    queries: agentsWithRunnableSkills.map((agent) => ({
+      queryKey: queryKeys.agents.skills(agent.id),
+      queryFn: () => agentsApi.skills(agent.id, selectedCompanyId!),
+      enabled: Boolean(selectedCompanyId),
+      staleTime: 60_000,
+    })),
+  });
+  const curatedGstackSkills = useMemo(() => {
+    const snapshots = new Map<string, AgentSkillSnapshot | undefined>(
+      agentsWithRunnableSkills.map((agent: Agent, index: number) => [agent.id, agentSkillQueries[index]?.data]),
+    );
+    return summarizeCuratedGstackSkills(agentsWithRunnableSkills, snapshots);
+  }, [agentSkillQueries, agentsWithRunnableSkills]);
+  const curatedGstackLoading = agentsQuery.isLoading
+    || agentSkillQueries.some((query) => query.isLoading || query.isFetching);
 
   const selectedSkillId = useMemo(() => {
     if (!routeSkillId) return skillsQuery.data?.[0]?.id ?? null;
@@ -1096,6 +1181,10 @@ export function CompanySkills() {
                 {importSkill.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : "Add"}
               </Button>
             </div>
+            <CuratedGstackSkillsPanel
+              loading={curatedGstackLoading}
+              skills={curatedGstackSkills}
+            />
             {scanStatusMessage && (
               <p className="mt-3 text-xs text-muted-foreground">
                 {scanStatusMessage}

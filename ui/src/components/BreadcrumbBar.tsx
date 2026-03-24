@@ -1,8 +1,10 @@
+import { Suspense, Fragment, lazy, useMemo } from "react";
 import { Link } from "@/lib/router";
 import { Menu } from "lucide-react";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { useSidebar } from "../context/SidebarContext";
 import { useCompany } from "../context/CompanyContext";
+import { useDeferredMount } from "../hooks/useDeferredMount";
 import { Button } from "@/components/ui/button";
 import {
   Breadcrumb,
@@ -12,28 +14,16 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Fragment, useMemo } from "react";
-import { PluginSlotOutlet, usePluginSlots } from "@/plugins/slots";
-import { PluginLauncherOutlet, usePluginLaunchers } from "@/plugins/launchers";
 
-type GlobalToolbarContext = { companyId: string | null; companyPrefix: string | null };
-
-function GlobalToolbarPlugins({ context }: { context: GlobalToolbarContext }) {
-  const { slots } = usePluginSlots({ slotTypes: ["globalToolbarButton"], companyId: context.companyId });
-  const { launchers } = usePluginLaunchers({ placementZones: ["globalToolbarButton"], companyId: context.companyId, enabled: !!context.companyId });
-  if (slots.length === 0 && launchers.length === 0) return null;
-  return (
-    <div className="flex items-center gap-1 ml-auto shrink-0 pl-2">
-      <PluginSlotOutlet slotTypes={["globalToolbarButton"]} context={context} className="flex items-center gap-1" />
-      <PluginLauncherOutlet placementZones={["globalToolbarButton"]} context={context} className="flex items-center gap-1" />
-    </div>
-  );
-}
+const GlobalToolbarPlugins = lazy(() =>
+  import("./GlobalToolbarPlugins").then((mod) => ({ default: mod.GlobalToolbarPlugins })),
+);
 
 export function BreadcrumbBar() {
   const { breadcrumbs } = useBreadcrumbs();
   const { toggleSidebar, isMobile } = useSidebar();
   const { selectedCompanyId, selectedCompany } = useCompany();
+  const showGlobalToolbarPlugins = useDeferredMount(Boolean(selectedCompanyId), 250);
 
   const globalToolbarSlotContext = useMemo(
     () => ({
@@ -43,7 +33,11 @@ export function BreadcrumbBar() {
     [selectedCompanyId, selectedCompany?.issuePrefix],
   );
 
-  const globalToolbarSlots = <GlobalToolbarPlugins context={globalToolbarSlotContext} />;
+  const globalToolbarSlots = showGlobalToolbarPlugins ? (
+    <Suspense fallback={null}>
+      <GlobalToolbarPlugins context={globalToolbarSlotContext} />
+    </Suspense>
+  ) : null;
 
   if (breadcrumbs.length === 0) {
     return (

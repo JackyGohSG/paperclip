@@ -22,7 +22,7 @@ import { PageSkeleton } from "../components/PageSkeleton";
 import { PageTabBar } from "../components/PageTabBar";
 import { projectRouteRef, cn } from "../lib/utils";
 import { Tabs } from "@/components/ui/tabs";
-import { PluginLauncherOutlet } from "@/plugins/launchers";
+import { PluginLauncherOutlet, PluginLauncherProvider } from "@/plugins/launchers";
 import { PluginSlotMount, PluginSlotOutlet, usePluginSlots } from "@/plugins/slots";
 
 /* ── Top-level tab types ── */
@@ -541,20 +541,22 @@ export function ProjectDetail() {
         missingBehavior="placeholder"
       />
 
-      <PluginLauncherOutlet
-        placementZones={["toolbarButton"]}
-        entityType="project"
-        context={{
-          companyId: resolvedCompanyId ?? null,
-          companyPrefix: companyPrefix ?? null,
-          projectId: project.id,
-          projectRef: canonicalProjectRef,
-          entityId: project.id,
-          entityType: "project",
-        }}
-        className="flex flex-wrap gap-2"
-        itemClassName="inline-flex"
-      />
+      <PluginLauncherProvider>
+        <PluginLauncherOutlet
+          placementZones={["toolbarButton"]}
+          entityType="project"
+          context={{
+            companyId: resolvedCompanyId ?? null,
+            companyPrefix: companyPrefix ?? null,
+            projectId: project.id,
+            projectRef: canonicalProjectRef,
+            entityId: project.id,
+            entityType: "project",
+          }}
+          className="flex flex-wrap gap-2"
+          itemClassName="inline-flex"
+        />
+      </PluginLauncherProvider>
 
       <Tabs value={activeTab ?? "list"} onValueChange={(value) => handleTabChange(value as ProjectTab)}>
         <PageTabBar

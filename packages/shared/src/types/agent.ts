@@ -89,6 +89,27 @@ export interface AgentDetail extends Agent {
   access: AgentAccessState;
 }
 
+export interface AgentMemoryEntrySummary {
+  path: string;
+  title: string;
+  updatedAt: Date | null;
+  excerpt: string | null;
+}
+
+export interface AgentMemoryDocument extends AgentMemoryEntrySummary {
+  content: string;
+  markdown: boolean;
+}
+
+export interface AgentMemorySnapshot {
+  todayNote: AgentMemoryEntrySummary | null;
+  recentDailyNotes: AgentMemoryEntrySummary[];
+  tacitMemory: AgentMemoryEntrySummary | null;
+  filePaths: string[];
+  selectedFile: AgentMemoryDocument | null;
+  warnings: string[];
+}
+
 export interface AgentKeyCreated {
   id: string;
   name: string;

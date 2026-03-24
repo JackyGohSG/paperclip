@@ -9,13 +9,18 @@ import {
   readPaperclipRuntimeSkillEntries,
   resolvePaperclipDesiredSkillNames,
 } from "@paperclipai/adapter-utils/server-utils";
+import { readCuratedGstackSkillEntries } from "./gstack.js";
 
 const __moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
 async function buildCodexSkillSnapshot(
   config: Record<string, unknown>,
 ): Promise<AdapterSkillSnapshot> {
-  const availableEntries = await readPaperclipRuntimeSkillEntries(config, __moduleDir);
+  const [paperclipEntries, curatedGstackEntries] = await Promise.all([
+    readPaperclipRuntimeSkillEntries(config, __moduleDir),
+    readCuratedGstackSkillEntries(config),
+  ]);
+  const availableEntries = [...paperclipEntries, ...curatedGstackEntries];
   const availableByKey = new Map(availableEntries.map((entry) => [entry.key, entry]));
   const desiredSkills = resolvePaperclipDesiredSkillNames(config, availableEntries);
   const desiredSet = new Set(desiredSkills);

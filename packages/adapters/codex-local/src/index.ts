@@ -31,6 +31,7 @@ Core fields:
 - command (string, optional): defaults to "codex"
 - extraArgs (string[], optional): additional CLI args
 - env (object, optional): KEY=VALUE environment variables
+- curatedGstack (object, optional): enable the curated gstack prototype bundle with { rootPath, runtimeNames? }; injects selected gstack Codex skills plus a shared "gstack" sidecar into the workspace and managed CODEX_HOME
 - workspaceStrategy (object, optional): execution workspace strategy; currently supports { type: "git_worktree", baseRef?, branchTemplate?, worktreeParentDir? }
 - workspaceRuntime (object, optional): workspace runtime service intents; local host-managed services are realized before Codex starts and exposed back via context/env
 

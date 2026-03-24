@@ -29,7 +29,7 @@ import { PriorityIcon } from "../components/PriorityIcon";
 import { StatusBadge } from "../components/StatusBadge";
 import { Identity } from "../components/Identity";
 import { PluginSlotMount, PluginSlotOutlet, usePluginSlots } from "@/plugins/slots";
-import { PluginLauncherOutlet } from "@/plugins/launchers";
+import { PluginLauncherOutlet, PluginLauncherProvider } from "@/plugins/launchers";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -883,18 +883,20 @@ export function IssueDetail() {
         missingBehavior="placeholder"
       />
 
-      <PluginLauncherOutlet
-        placementZones={["toolbarButton"]}
-        entityType="issue"
-        context={{
-          companyId: issue.companyId,
-          projectId: issue.projectId ?? null,
-          entityId: issue.id,
-          entityType: "issue",
-        }}
-        className="flex flex-wrap gap-2"
-        itemClassName="inline-flex"
-      />
+      <PluginLauncherProvider>
+        <PluginLauncherOutlet
+          placementZones={["toolbarButton"]}
+          entityType="issue"
+          context={{
+            companyId: issue.companyId,
+            projectId: issue.projectId ?? null,
+            entityId: issue.id,
+            entityType: "issue",
+          }}
+          className="flex flex-wrap gap-2"
+          itemClassName="inline-flex"
+        />
+      </PluginLauncherProvider>
 
       <PluginSlotOutlet
         slotTypes={["taskDetailView"]}

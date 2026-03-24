@@ -3,7 +3,6 @@ import { useNavigate } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
 import { useCompany } from "../context/CompanyContext";
 import { useDialog } from "../context/DialogContext";
-import { useSidebar } from "../context/SidebarContext";
 import { issuesApi } from "../api/issues";
 import { agentsApi } from "../api/agents";
 import { projectsApi } from "../api/projects";
@@ -32,26 +31,18 @@ import {
 import { Identity } from "./Identity";
 import { agentUrl, projectUrl } from "../lib/utils";
 
-export function CommandPalette() {
-  const [open, setOpen] = useState(false);
+export function CommandPalette({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
   const { selectedCompanyId } = useCompany();
   const { openNewIssue, openNewAgent } = useDialog();
-  const { isMobile, setSidebarOpen } = useSidebar();
   const searchQuery = query.trim();
-
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        setOpen(true);
-        if (isMobile) setSidebarOpen(false);
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isMobile, setSidebarOpen]);
 
   useEffect(() => {
     if (!open) setQuery("");
@@ -86,7 +77,7 @@ export function CommandPalette() {
   );
 
   function go(path: string) {
-    setOpen(false);
+    onOpenChange(false);
     navigate(path);
   }
 
@@ -101,10 +92,7 @@ export function CommandPalette() {
   );
 
   return (
-    <CommandDialog open={open} onOpenChange={(v) => {
-        setOpen(v);
-        if (v && isMobile) setSidebarOpen(false);
-      }}>
+    <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandInput
         placeholder="Search issues, agents, projects..."
         value={query}
@@ -116,7 +104,7 @@ export function CommandPalette() {
         <CommandGroup heading="Actions">
           <CommandItem
             onSelect={() => {
-              setOpen(false);
+              onOpenChange(false);
               openNewIssue();
             }}
           >
@@ -126,7 +114,7 @@ export function CommandPalette() {
           </CommandItem>
           <CommandItem
             onSelect={() => {
-              setOpen(false);
+              onOpenChange(false);
               openNewAgent();
             }}
           >

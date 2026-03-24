@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
 import { dashboardApi } from "../api/dashboard";
@@ -10,6 +10,7 @@ import { heartbeatsApi } from "../api/heartbeats";
 import { useCompany } from "../context/CompanyContext";
 import { useDialog } from "../context/DialogContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
+import { useDeferredMount } from "../hooks/useDeferredMount";
 import { queryKeys } from "../lib/queryKeys";
 import { MetricCard } from "../components/MetricCard";
 import { EmptyState } from "../components/EmptyState";
@@ -20,11 +21,30 @@ import { Identity } from "../components/Identity";
 import { timeAgo } from "../lib/timeAgo";
 import { cn, formatCents } from "../lib/utils";
 import { Bot, CircleDot, DollarSign, ShieldCheck, LayoutDashboard, PauseCircle } from "lucide-react";
-import { ActiveAgentsPanel } from "../components/ActiveAgentsPanel";
-import { ChartCard, RunActivityChart, PriorityChart, IssueStatusChart, SuccessRateChart } from "../components/ActivityCharts";
 import { PageSkeleton } from "../components/PageSkeleton";
 import type { Agent, Issue } from "@paperclipai/shared";
-import { PluginSlotOutlet } from "@/plugins/slots";
+
+const ActiveAgentsPanel = lazy(() =>
+  import("../components/ActiveAgentsPanel").then((mod) => ({ default: mod.ActiveAgentsPanel })),
+);
+const ChartCard = lazy(() =>
+  import("../components/ActivityCharts").then((mod) => ({ default: mod.ChartCard })),
+);
+const RunActivityChart = lazy(() =>
+  import("../components/ActivityCharts").then((mod) => ({ default: mod.RunActivityChart })),
+);
+const PriorityChart = lazy(() =>
+  import("../components/ActivityCharts").then((mod) => ({ default: mod.PriorityChart })),
+);
+const IssueStatusChart = lazy(() =>
+  import("../components/ActivityCharts").then((mod) => ({ default: mod.IssueStatusChart })),
+);
+const SuccessRateChart = lazy(() =>
+  import("../components/ActivityCharts").then((mod) => ({ default: mod.SuccessRateChart })),
+);
+const PluginSlotOutlet = lazy(() =>
+  import("@/plugins/slots").then((mod) => ({ default: mod.PluginSlotOutlet })),
+);
 
 function getRecentIssues(issues: Issue[]): Issue[] {
   return [...issues]
@@ -35,6 +55,7 @@ export function Dashboard() {
   const { selectedCompanyId, companies } = useCompany();
   const { openOnboarding } = useDialog();
   const { setBreadcrumbs } = useBreadcrumbs();
+  const showDeferredSections = useDeferredMount(Boolean(selectedCompanyId), 250);
   const [animatedActivityIds, setAnimatedActivityIds] = useState<Set<string>>(new Set());
   const seenActivityIdsRef = useRef<Set<string>>(new Set());
   const hydratedActivityRef = useRef(false);
@@ -206,7 +227,11 @@ export function Dashboard() {
         </div>
       )}
 
-      <ActiveAgentsPanel companyId={selectedCompanyId!} />
+      {showDeferredSections ? (
+        <Suspense fallback={<div className="rounded-xl border border-border p-4"><p className="text-sm text-muted-foreground">Loading agents…</p></div>}>
+          <ActiveAgentsPanel companyId={selectedCompanyId!} />
+        </Suspense>
+      ) : null}
 
       {data && (
         <>
@@ -283,27 +308,35 @@ export function Dashboard() {
             />
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <ChartCard title="Run Activity" subtitle="Last 14 days">
-              <RunActivityChart runs={runs ?? []} />
-            </ChartCard>
-            <ChartCard title="Issues by Priority" subtitle="Last 14 days">
-              <PriorityChart issues={issues ?? []} />
-            </ChartCard>
-            <ChartCard title="Issues by Status" subtitle="Last 14 days">
-              <IssueStatusChart issues={issues ?? []} />
-            </ChartCard>
-            <ChartCard title="Success Rate" subtitle="Last 14 days">
-              <SuccessRateChart runs={runs ?? []} />
-            </ChartCard>
-          </div>
+          {showDeferredSections ? (
+            <>
+              <Suspense fallback={<div className="grid grid-cols-2 lg:grid-cols-4 gap-4">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="border border-border rounded-lg p-4 h-40" />)}</div>}>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <ChartCard title="Run Activity" subtitle="Last 14 days">
+                    <RunActivityChart runs={runs ?? []} />
+                  </ChartCard>
+                  <ChartCard title="Issues by Priority" subtitle="Last 14 days">
+                    <PriorityChart issues={issues ?? []} />
+                  </ChartCard>
+                  <ChartCard title="Issues by Status" subtitle="Last 14 days">
+                    <IssueStatusChart issues={issues ?? []} />
+                  </ChartCard>
+                  <ChartCard title="Success Rate" subtitle="Last 14 days">
+                    <SuccessRateChart runs={runs ?? []} />
+                  </ChartCard>
+                </div>
+              </Suspense>
 
-          <PluginSlotOutlet
-            slotTypes={["dashboardWidget"]}
-            context={{ companyId: selectedCompanyId }}
-            className="grid gap-4 md:grid-cols-2"
-            itemClassName="rounded-lg border bg-card p-4 shadow-sm"
-          />
+              <Suspense fallback={null}>
+                <PluginSlotOutlet
+                  slotTypes={["dashboardWidget"]}
+                  context={{ companyId: selectedCompanyId }}
+                  className="grid gap-4 md:grid-cols-2"
+                  itemClassName="rounded-lg border bg-card p-4 shadow-sm"
+                />
+              </Suspense>
+            </>
+          ) : null}
 
           <div className="grid md:grid-cols-2 gap-4">
             {/* Recent Activity */}

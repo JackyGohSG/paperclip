@@ -13,7 +13,17 @@ async function makeTempDir(prefix: string): Promise<string> {
 
 describe("codex local skill sync", () => {
   const paperclipKey = "paperclipai/paperclip/paperclip";
+  const gstackOfficeHoursKey = "paperclipai/gstack/gstack-office-hours";
   const cleanupDirs = new Set<string>();
+
+  async function createCuratedGstackRoot(root: string) {
+    await fs.mkdir(path.join(root, ".agents", "skills", "gstack-office-hours"), { recursive: true });
+    await fs.mkdir(path.join(root, ".agents", "skills", "gstack-plan-ceo-review"), { recursive: true });
+    await fs.mkdir(path.join(root, ".agents", "skills", "gstack-browse"), { recursive: true });
+    await fs.writeFile(path.join(root, ".agents", "skills", "gstack-office-hours", "SKILL.md"), "---\nname: office-hours\n---\n", "utf8");
+    await fs.writeFile(path.join(root, ".agents", "skills", "gstack-plan-ceo-review", "SKILL.md"), "---\nname: plan-ceo-review\n---\n", "utf8");
+    await fs.writeFile(path.join(root, ".agents", "skills", "gstack-browse", "SKILL.md"), "---\nname: browse\n---\n", "utf8");
+  }
 
   afterEach(async () => {
     await Promise.all(Array.from(cleanupDirs).map((dir) => fs.rm(dir, { recursive: true, force: true })));
@@ -118,5 +128,31 @@ describe("codex local skill sync", () => {
     expect(snapshot.desiredSkills).not.toContain("paperclip");
     expect(snapshot.entries.find((entry) => entry.key === paperclipKey)?.state).toBe("configured");
     expect(snapshot.entries.find((entry) => entry.key === "paperclip")).toBeUndefined();
+  });
+
+  it("includes the curated gstack bundle when configured", async () => {
+    const codexHome = await makeTempDir("paperclip-codex-gstack-sync-");
+    const gstackRoot = await makeTempDir("paperclip-codex-gstack-root-");
+    cleanupDirs.add(codexHome);
+    cleanupDirs.add(gstackRoot);
+    await createCuratedGstackRoot(gstackRoot);
+
+    const snapshot = await listCodexSkills({
+      agentId: "agent-4",
+      companyId: "company-1",
+      adapterType: "codex_local",
+      config: {
+        env: {
+          CODEX_HOME: codexHome,
+        },
+        curatedGstack: {
+          rootPath: gstackRoot,
+        },
+      },
+    });
+
+    expect(snapshot.desiredSkills).toContain(gstackOfficeHoursKey);
+    expect(snapshot.entries.find((entry) => entry.key === gstackOfficeHoursKey)?.state).toBe("configured");
+    expect(snapshot.entries.find((entry) => entry.key === gstackOfficeHoursKey)?.required).toBe(true);
   });
 });

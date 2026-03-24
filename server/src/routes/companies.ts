@@ -6,6 +6,7 @@ import {
   companyPortabilityPreviewSchema,
   createCompanySchema,
   updateCompanyBrandingSchema,
+  updateCompanyNotesSchema,
   updateCompanySchema,
 } from "@paperclipai/shared";
 import { forbidden } from "../errors.js";
@@ -302,6 +303,29 @@ export function companyRoutes(db: Db, storage?: StorageService) {
       entityType: "company",
       entityId: companyId,
       details: req.body,
+    });
+    res.json(company);
+  });
+
+  router.patch("/:companyId/notes", validate(updateCompanyNotesSchema), async (req, res) => {
+    const companyId = req.params.companyId as string;
+    await assertCanUpdateBranding(req, companyId);
+    const company = await svc.update(companyId, { notes: req.body.notes });
+    if (!company) {
+      res.status(404).json({ error: "Company not found" });
+      return;
+    }
+    const actor = getActorInfo(req);
+    await logActivity(db, {
+      companyId,
+      actorType: actor.actorType,
+      actorId: actor.actorId,
+      agentId: actor.agentId,
+      runId: actor.runId,
+      action: "company.updated",
+      entityType: "company",
+      entityId: companyId,
+      details: { notesUpdated: true },
     });
     res.json(company);
   });

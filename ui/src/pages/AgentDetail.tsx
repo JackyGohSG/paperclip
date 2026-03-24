@@ -35,9 +35,10 @@ import { CopyText } from "../components/CopyText";
 import { EntityRow } from "../components/EntityRow";
 import { Identity } from "../components/Identity";
 import { PageSkeleton } from "../components/PageSkeleton";
+import { AgentMemoryBrowser } from "../components/AgentMemoryBrowser";
 import { RunButton, PauseResumeButton } from "../components/AgentActionButtons";
 import { BudgetPolicyCard } from "../components/BudgetPolicyCard";
-import { PackageFileTree, buildFileTree } from "../components/PackageFileTree";
+import { PackageFileTree, buildFileTree, collectAllPaths } from "../components/PackageFileTree";
 import { ScrollToBottom } from "../components/ScrollToBottom";
 import { formatCents, formatDate, relativeTime, formatTokens, visibleRunCostUsd } from "../lib/utils";
 import { cn } from "../lib/utils";
@@ -70,6 +71,7 @@ import {
   ArrowLeft,
   HelpCircle,
   FolderOpen,
+  FileText,
 } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -993,6 +995,7 @@ export function AgentDetail() {
           runtimeState={runtimeState}
           agentId={agent.id}
           agentRouteId={canonicalAgentRef}
+          companyId={resolvedCompanyId ?? undefined}
         />
       )}
 
@@ -1141,6 +1144,7 @@ function AgentOverview({
   runtimeState,
   agentId,
   agentRouteId,
+  companyId,
 }: {
   agent: AgentDetailRecord;
   runs: HeartbeatRun[];
@@ -1148,6 +1152,7 @@ function AgentOverview({
   runtimeState?: AgentRuntimeState;
   agentId: string;
   agentRouteId: string;
+  companyId?: string;
 }) {
   return (
     <div className="space-y-8">
@@ -1203,12 +1208,26 @@ function AgentOverview({
         )}
       </div>
 
+      <AgentMemorySection agent={agent} companyId={companyId} />
+
       {/* Costs */}
       <div className="space-y-3">
         <h3 className="text-sm font-medium">Costs</h3>
         <CostsSection runtimeState={runtimeState} runs={runs} />
       </div>
     </div>
+  );
+}
+
+function AgentMemorySection({
+  agent,
+  companyId,
+}: {
+  agent: AgentDetailRecord;
+  companyId?: string;
+}) {
+  return (
+    <AgentMemoryBrowser agent={agent} companyId={companyId} />
   );
 }
 

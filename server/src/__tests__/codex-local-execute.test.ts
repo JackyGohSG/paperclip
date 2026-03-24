@@ -387,4 +387,128 @@ describe("codex execute", () => {
       await fs.rm(root, { recursive: true, force: true });
     }
   });
+
+  it("injects curated gstack skills and sidecars during execute", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-execute-curated-gstack-"));
+    const workspace = path.join(root, "workspace");
+    const commandPath = path.join(root, "codex");
+    const capturePath = path.join(root, "capture.json");
+    const sharedCodexHome = path.join(root, "shared-codex-home");
+    const paperclipHome = path.join(root, "paperclip-home");
+    const managedCodexHome = path.join(
+      paperclipHome,
+      "instances",
+      "worktree-1",
+      "companies",
+      "company-1",
+      "codex-home",
+    );
+    const gstackRoot = path.join(root, "gstack");
+    const gstackSkillsRoot = path.join(gstackRoot, ".agents", "skills");
+    const gstackSidecarRoot = path.join(gstackSkillsRoot, "gstack");
+    await fs.mkdir(workspace, { recursive: true });
+    await fs.mkdir(sharedCodexHome, { recursive: true });
+    await fs.mkdir(path.join(gstackSkillsRoot, "gstack-office-hours"), { recursive: true });
+    await fs.mkdir(path.join(gstackSkillsRoot, "gstack-plan-ceo-review"), { recursive: true });
+    await fs.mkdir(path.join(gstackSkillsRoot, "gstack-browse"), { recursive: true });
+    await fs.mkdir(gstackSidecarRoot, { recursive: true });
+    await fs.writeFile(path.join(sharedCodexHome, "auth.json"), '{"token":"shared"}\n', "utf8");
+    await fs.writeFile(
+      path.join(gstackSkillsRoot, "gstack-office-hours", "SKILL.md"),
+      "---\nname: office-hours\n---\n",
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(gstackSkillsRoot, "gstack-plan-ceo-review", "SKILL.md"),
+      "---\nname: plan-ceo-review\n---\n",
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(gstackSkillsRoot, "gstack-browse", "SKILL.md"),
+      "---\nname: browse\n---\n",
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(gstackSidecarRoot, "SKILL.md"),
+      "---\nname: gstack\n---\n",
+      "utf8",
+    );
+    await writeFakeCodexCommand(commandPath);
+
+    const previousHome = process.env.HOME;
+    const previousPaperclipHome = process.env.PAPERCLIP_HOME;
+    const previousPaperclipInstanceId = process.env.PAPERCLIP_INSTANCE_ID;
+    const previousPaperclipInWorktree = process.env.PAPERCLIP_IN_WORKTREE;
+    const previousCodexHome = process.env.CODEX_HOME;
+    process.env.HOME = root;
+    process.env.PAPERCLIP_HOME = paperclipHome;
+    process.env.PAPERCLIP_INSTANCE_ID = "worktree-1";
+    process.env.PAPERCLIP_IN_WORKTREE = "true";
+    process.env.CODEX_HOME = sharedCodexHome;
+
+    try {
+      const result = await execute({
+        runId: "run-curated-gstack",
+        agent: {
+          id: "agent-1",
+          companyId: "company-1",
+          name: "Codex Coder",
+          adapterType: "codex_local",
+          adapterConfig: {},
+        },
+        runtime: {
+          sessionId: null,
+          sessionParams: null,
+          sessionDisplayId: null,
+          taskKey: null,
+        },
+        config: {
+          command: commandPath,
+          cwd: workspace,
+          curatedGstack: {
+            enabled: true,
+            rootPath: gstackRoot,
+          },
+          env: {
+            PAPERCLIP_TEST_CAPTURE_PATH: capturePath,
+          },
+          promptTemplate: "Follow the paperclip heartbeat.",
+        },
+        context: {},
+        authToken: "run-jwt-token",
+        onLog: async () => {},
+      });
+
+      expect(result.exitCode).toBe(0);
+      expect(result.errorMessage).toBeNull();
+
+      const capture = JSON.parse(await fs.readFile(capturePath, "utf8")) as CapturePayload;
+      expect(capture.codexHome).toBe(managedCodexHome);
+
+      const workspaceSkillsDir = path.join(workspace, ".agents", "skills");
+      expect((await fs.lstat(path.join(workspaceSkillsDir, "gstack-office-hours"))).isSymbolicLink()).toBe(true);
+      expect((await fs.lstat(path.join(workspaceSkillsDir, "gstack-plan-ceo-review"))).isSymbolicLink()).toBe(true);
+      expect((await fs.lstat(path.join(workspaceSkillsDir, "gstack-browse"))).isSymbolicLink()).toBe(true);
+
+      const workspaceSidecar = path.join(workspaceSkillsDir, "gstack");
+      const managedSidecar = path.join(managedCodexHome, "skills", "gstack");
+      const expectedSidecarRoot = gstackSidecarRoot;
+      expect((await fs.lstat(workspaceSidecar)).isSymbolicLink()).toBe(true);
+      expect((await fs.lstat(managedSidecar)).isSymbolicLink()).toBe(true);
+      expect(await fs.realpath(workspaceSidecar)).toBe(await fs.realpath(expectedSidecarRoot));
+      expect(await fs.realpath(managedSidecar)).toBe(await fs.realpath(expectedSidecarRoot));
+    } finally {
+      if (previousHome === undefined) delete process.env.HOME;
+      else process.env.HOME = previousHome;
+      if (previousPaperclipHome === undefined) delete process.env.PAPERCLIP_HOME;
+      else process.env.PAPERCLIP_HOME = previousPaperclipHome;
+      if (previousPaperclipInstanceId === undefined) delete process.env.PAPERCLIP_INSTANCE_ID;
+      else process.env.PAPERCLIP_INSTANCE_ID = previousPaperclipInstanceId;
+      if (previousPaperclipInWorktree === undefined) delete process.env.PAPERCLIP_IN_WORKTREE;
+      else process.env.PAPERCLIP_IN_WORKTREE = previousPaperclipInWorktree;
+      if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
+      else process.env.CODEX_HOME = previousCodexHome;
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
 });

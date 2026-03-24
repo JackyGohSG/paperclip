@@ -29,6 +29,7 @@ import {
 import { validate } from "../middleware/validate.js";
 import {
   agentService,
+  readAgentMemorySnapshot,
   agentInstructionsService,
   accessService,
   approvalService,
@@ -249,6 +250,23 @@ export function agentRoutes(db: Db) {
     const actorAgent = await svc.getById(req.actor.agentId);
     if (!actorAgent || actorAgent.companyId !== targetAgent.companyId) {
       throw forbidden("Agent key cannot access another company");
+    }
+  }
+
+  async function assertCanReadAgentMemory(
+    req: Request,
+    targetAgent: { id: string; companyId: string },
+  ) {
+    assertCompanyAccess(req, targetAgent.companyId);
+    if (req.actor.type === "board") return;
+    if (!req.actor.agentId) throw forbidden("Agent authentication required");
+
+    const actorAgent = await svc.getById(req.actor.agentId);
+    if (!actorAgent || actorAgent.companyId !== targetAgent.companyId) {
+      throw forbidden("Agent key cannot access another company");
+    }
+    if (actorAgent.id !== targetAgent.id) {
+      throw forbidden("Agents can only read their own memory");
     }
   }
 
@@ -1013,6 +1031,20 @@ export function agentRoutes(db: Db) {
       }
     }
     res.json(await buildAgentDetail(agent));
+  });
+
+  router.get("/agents/:id/memory", async (req, res) => {
+    const companyId = await resolveCompanyIdForAgentReference(req);
+    if (!companyId) throw notFound("Agent not found");
+    const resolved = await svc.resolveByReference(companyId, req.params.id);
+    if (resolved.ambiguous) {
+      throw conflict("Agent shortname is ambiguous in this company. Use the agent ID.");
+    }
+    if (!resolved.agent) throw notFound("Agent not found");
+    await assertCanReadAgentMemory(req, resolved.agent);
+
+    const selectedPath = typeof req.query.path === "string" ? req.query.path : null;
+    res.json(await readAgentMemorySnapshot(resolved.agent.id, { selectedPath }));
   });
 
   router.get("/agents/:id/configuration", async (req, res) => {

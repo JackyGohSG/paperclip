@@ -96,6 +96,18 @@ function resolvePaperclipEnvPath(configPath: string): string {
   return path.resolve(path.dirname(configPath), ENV_BASENAME);
 }
 
+function findAncestorEnvPath(startDir: string): string | null {
+  let currentDir = path.resolve(startDir);
+
+  while (true) {
+    const candidate = path.resolve(currentDir, ENV_BASENAME);
+    if (existsSync(candidate)) return candidate;
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) return null;
+    currentDir = parentDir;
+  }
+}
+
 function parseEnvFile(contents: string): Record<string, string> {
   const entries: Record<string, string> = {};
 
@@ -215,7 +227,11 @@ function readConfig(configPath: string): PartialConfig | null {
 export function resolveDatabaseTarget(): ResolvedDatabaseTarget {
   const configPath = resolvePaperclipConfigPath();
   const envPath = resolvePaperclipEnvPath(configPath);
-  const envEntries = readEnvEntries(envPath);
+  const ancestorEnvPath = findAncestorEnvPath(process.cwd());
+  const mergedEnvEntries = {
+    ...(ancestorEnvPath && ancestorEnvPath !== envPath ? readEnvEntries(ancestorEnvPath) : {}),
+    ...readEnvEntries(envPath),
+  };
 
   const envUrl = process.env.DATABASE_URL?.trim();
   if (envUrl) {
@@ -228,7 +244,7 @@ export function resolveDatabaseTarget(): ResolvedDatabaseTarget {
     };
   }
 
-  const fileEnvUrl = envEntries.DATABASE_URL?.trim();
+  const fileEnvUrl = mergedEnvEntries.DATABASE_URL?.trim();
   if (fileEnvUrl) {
     return {
       mode: "postgres",

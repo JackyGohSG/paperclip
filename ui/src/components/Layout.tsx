@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, Moon, Settings, Sun } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate, useParams } from "@/lib/router";
@@ -7,11 +7,6 @@ import { Sidebar } from "./Sidebar";
 import { InstanceSidebar } from "./InstanceSidebar";
 import { BreadcrumbBar } from "./BreadcrumbBar";
 import { PropertiesPanel } from "./PropertiesPanel";
-import { CommandPalette } from "./CommandPalette";
-import { NewIssueDialog } from "./NewIssueDialog";
-import { NewProjectDialog } from "./NewProjectDialog";
-import { NewGoalDialog } from "./NewGoalDialog";
-import { NewAgentDialog } from "./NewAgentDialog";
 import { ToastViewport } from "./ToastViewport";
 import { MobileBottomNav } from "./MobileBottomNav";
 import { WorktreeBanner } from "./WorktreeBanner";
@@ -36,6 +31,11 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 const INSTANCE_SETTINGS_MEMORY_KEY = "paperclip.lastInstanceSettingsPath";
+const NewIssueDialog = lazy(() => import("./NewIssueDialog").then((mod) => ({ default: mod.NewIssueDialog })));
+const NewProjectDialog = lazy(() => import("./NewProjectDialog").then((mod) => ({ default: mod.NewProjectDialog })));
+const NewGoalDialog = lazy(() => import("./NewGoalDialog").then((mod) => ({ default: mod.NewGoalDialog })));
+const NewAgentDialog = lazy(() => import("./NewAgentDialog").then((mod) => ({ default: mod.NewAgentDialog })));
+const CommandPalette = lazy(() => import("./CommandPalette").then((mod) => ({ default: mod.CommandPalette })));
 
 function readRememberedInstanceSettingsPath(): string {
   if (typeof window === "undefined") return DEFAULT_INSTANCE_SETTINGS_PATH;
@@ -48,7 +48,14 @@ function readRememberedInstanceSettingsPath(): string {
 
 export function Layout() {
   const { sidebarOpen, setSidebarOpen, toggleSidebar, isMobile } = useSidebar();
-  const { openNewIssue, openOnboarding } = useDialog();
+  const {
+    openNewIssue,
+    openOnboarding,
+    newIssueOpen,
+    newProjectOpen,
+    newGoalOpen,
+    newAgentOpen,
+  } = useDialog();
   const { togglePanelVisible } = usePanel();
   const {
     companies,
@@ -65,6 +72,8 @@ export function Layout() {
   const isInstanceSettingsRoute = location.pathname.startsWith("/instance/");
   const onboardingTriggered = useRef(false);
   const lastMainScrollTop = useRef(0);
+  const [commandPaletteEnabled, setCommandPaletteEnabled] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [mobileNavVisible, setMobileNavVisible] = useState(true);
   const [instanceSettingsTarget, setInstanceSettingsTarget] = useState<string>(() => readRememberedInstanceSettingsPath());
   const nextTheme = theme === "dark" ? "light" : "dark";
@@ -154,6 +163,20 @@ export function Layout() {
     lastMainScrollTop.current = 0;
     setMobileNavVisible(true);
   }, [isMobile]);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setCommandPaletteEnabled(true);
+        setCommandPaletteOpen(true);
+        if (isMobile) setSidebarOpen(false);
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isMobile, setSidebarOpen]);
 
   // Swipe gesture to open/close sidebar on mobile
   useEffect(() => {
@@ -430,11 +453,24 @@ export function Layout() {
         </div>
       </div>
       {isMobile && <MobileBottomNav visible={mobileNavVisible} />}
-      <CommandPalette />
-      <NewIssueDialog />
-      <NewProjectDialog />
-      <NewGoalDialog />
-      <NewAgentDialog />
+      <Suspense fallback={null}>
+        {commandPaletteEnabled ? (
+          <CommandPalette
+            open={commandPaletteOpen}
+            onOpenChange={(open) => {
+              if (open) {
+                setCommandPaletteEnabled(true);
+                if (isMobile) setSidebarOpen(false);
+              }
+              setCommandPaletteOpen(open);
+            }}
+          />
+        ) : null}
+        {newIssueOpen ? <NewIssueDialog /> : null}
+        {newProjectOpen ? <NewProjectDialog /> : null}
+        {newGoalOpen ? <NewGoalDialog /> : null}
+        {newAgentOpen ? <NewAgentDialog /> : null}
+      </Suspense>
       <ToastViewport />
     </div>
   );

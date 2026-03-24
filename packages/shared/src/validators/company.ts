@@ -3,6 +3,7 @@ import { COMPANY_STATUSES } from "../constants.js";
 
 const logoAssetIdSchema = z.string().uuid().nullable().optional();
 const brandColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional();
+const notesSchema = z.string().nullable();
 
 export const createCompanySchema = z.object({
   name: z.string().min(1),
@@ -23,6 +24,14 @@ export const updateCompanySchema = createCompanySchema
   });
 
 export type UpdateCompany = z.infer<typeof updateCompanySchema>;
+
+export const updateCompanyNotesSchema = z
+  .object({
+    notes: notesSchema,
+  })
+  .strict();
+
+export type UpdateCompanyNotes = z.infer<typeof updateCompanyNotesSchema>;
 
 export const updateCompanyBrandingSchema = z
   .object({

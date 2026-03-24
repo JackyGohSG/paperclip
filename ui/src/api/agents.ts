@@ -4,6 +4,7 @@ import type {
   AgentInstructionsBundle,
   AgentInstructionsFileDetail,
   AgentSkillSnapshot,
+  AgentMemorySnapshot,
   AdapterEnvironmentTestResult,
   AgentKeyCreated,
   AgentRuntimeState,
@@ -151,6 +152,14 @@ export const agentsApi = {
     api.delete<{ ok: true }>(agentPath(agentId, companyId, `/keys/${encodeURIComponent(keyId)}`)),
   runtimeState: (id: string, companyId?: string) =>
     api.get<AgentRuntimeState>(agentPath(id, companyId, "/runtime-state")),
+  memory: (id: string, params?: { path?: string | null }, companyId?: string) =>
+    api.get<AgentMemorySnapshot>(
+      agentPath(
+        id,
+        companyId,
+        `/memory${params?.path ? `?path=${encodeURIComponent(params.path)}` : ""}`,
+      ),
+    ),
   taskSessions: (id: string, companyId?: string) =>
     api.get<AgentTaskSession[]>(agentPath(id, companyId, "/task-sessions")),
   resetSession: (id: string, taskKey?: string | null, companyId?: string) =>

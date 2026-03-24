@@ -1,6 +1,6 @@
 import { readConfigFile } from "./config-file.js";
 import { existsSync, realpathSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
 import { config as loadDotenv } from "dotenv";
 import { resolvePaperclipEnvPath } from "./paths.js";
 import {
@@ -28,12 +28,24 @@ if (existsSync(PAPERCLIP_ENV_FILE_PATH)) {
   loadDotenv({ path: PAPERCLIP_ENV_FILE_PATH, override: false, quiet: true });
 }
 
-const CWD_ENV_PATH = resolve(process.cwd(), ".env");
-const isSameFile = existsSync(CWD_ENV_PATH) && existsSync(PAPERCLIP_ENV_FILE_PATH)
-  ? realpathSync(CWD_ENV_PATH) === realpathSync(PAPERCLIP_ENV_FILE_PATH)
-  : CWD_ENV_PATH === PAPERCLIP_ENV_FILE_PATH;
-if (!isSameFile && existsSync(CWD_ENV_PATH)) {
-  loadDotenv({ path: CWD_ENV_PATH, override: false, quiet: true });
+function findAncestorEnvPath(startDir: string): string | null {
+  let currentDir = resolve(startDir);
+
+  while (true) {
+    const candidate = resolve(currentDir, ".env");
+    if (existsSync(candidate)) return candidate;
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) return null;
+    currentDir = parentDir;
+  }
+}
+
+const ancestorEnvPath = findAncestorEnvPath(process.cwd());
+const isSameFile = ancestorEnvPath && existsSync(PAPERCLIP_ENV_FILE_PATH)
+  ? realpathSync(ancestorEnvPath) === realpathSync(PAPERCLIP_ENV_FILE_PATH)
+  : ancestorEnvPath === PAPERCLIP_ENV_FILE_PATH;
+if (ancestorEnvPath && !isSameFile) {
+  loadDotenv({ path: ancestorEnvPath, override: false, quiet: true });
 }
 
 type DatabaseMode = "embedded-postgres" | "postgres";

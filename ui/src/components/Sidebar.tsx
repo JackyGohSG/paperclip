@@ -1,3 +1,4 @@
+import { Suspense, lazy } from "react";
 import {
   Inbox,
   CircleDot,
@@ -11,24 +12,35 @@ import {
   Boxes,
   Repeat,
   Settings,
+  FileText,
+  Brain,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { SidebarSection } from "./SidebarSection";
 import { SidebarNavItem } from "./SidebarNavItem";
-import { SidebarProjects } from "./SidebarProjects";
-import { SidebarAgents } from "./SidebarAgents";
 import { useDialog } from "../context/DialogContext";
 import { useCompany } from "../context/CompanyContext";
 import { heartbeatsApi } from "../api/heartbeats";
 import { queryKeys } from "../lib/queryKeys";
+import { useDeferredMount } from "../hooks/useDeferredMount";
 import { useInboxBadge } from "../hooks/useInboxBadge";
 import { Button } from "@/components/ui/button";
-import { PluginSlotOutlet } from "@/plugins/slots";
+
+const SidebarProjects = lazy(() =>
+  import("./SidebarProjects").then((mod) => ({ default: mod.SidebarProjects })),
+);
+const SidebarAgents = lazy(() =>
+  import("./SidebarAgents").then((mod) => ({ default: mod.SidebarAgents })),
+);
+const PluginSlotOutlet = lazy(() =>
+  import("@/plugins/slots").then((mod) => ({ default: mod.PluginSlotOutlet })),
+);
 
 export function Sidebar() {
   const { openNewIssue } = useDialog();
   const { selectedCompanyId, selectedCompany } = useCompany();
   const inboxBadge = useInboxBadge(selectedCompanyId);
+  const showDeferredSections = useDeferredMount(Boolean(selectedCompanyId), 250);
   const { data: liveRuns } = useQuery({
     queryKey: queryKeys.liveRuns(selectedCompanyId!),
     queryFn: () => heartbeatsApi.liveRunsForCompany(selectedCompanyId!),
@@ -88,24 +100,33 @@ export function Sidebar() {
             badgeTone={inboxBadge.failedRuns > 0 ? "danger" : "default"}
             alert={inboxBadge.failedRuns > 0}
           />
-          <PluginSlotOutlet
-            slotTypes={["sidebar"]}
-            context={pluginContext}
-            className="flex flex-col gap-0.5"
-            itemClassName="text-[13px] font-medium"
-            missingBehavior="placeholder"
-          />
+          {showDeferredSections ? (
+            <Suspense fallback={null}>
+              <PluginSlotOutlet
+                slotTypes={["sidebar"]}
+                context={pluginContext}
+                className="flex flex-col gap-0.5"
+                itemClassName="text-[13px] font-medium"
+                missingBehavior="placeholder"
+              />
+            </Suspense>
+          ) : null}
         </div>
 
         <SidebarSection label="Work">
           <SidebarNavItem to="/issues" label="Issues" icon={CircleDot} />
+          <SidebarNavItem to="/memory" label="Memory" icon={Brain} />
+          <SidebarNavItem to="/notes" label="Notes" icon={FileText} />
           <SidebarNavItem to="/routines" label="Routines" icon={Repeat} textBadge="Beta" textBadgeTone="amber" />
           <SidebarNavItem to="/goals" label="Goals" icon={Target} />
         </SidebarSection>
 
-        <SidebarProjects />
-
-        <SidebarAgents />
+        {showDeferredSections ? (
+          <Suspense fallback={null}>
+            <SidebarProjects />
+            <SidebarAgents />
+          </Suspense>
+        ) : null}
 
         <SidebarSection label="Company">
           <SidebarNavItem to="/org" label="Org" icon={Network} />
@@ -115,13 +136,17 @@ export function Sidebar() {
           <SidebarNavItem to="/company/settings" label="Settings" icon={Settings} />
         </SidebarSection>
 
-        <PluginSlotOutlet
-          slotTypes={["sidebarPanel"]}
-          context={pluginContext}
-          className="flex flex-col gap-3"
-          itemClassName="rounded-lg border border-border p-3"
-          missingBehavior="placeholder"
-        />
+        {showDeferredSections ? (
+          <Suspense fallback={null}>
+            <PluginSlotOutlet
+              slotTypes={["sidebarPanel"]}
+              context={pluginContext}
+              className="flex flex-col gap-3"
+              itemClassName="rounded-lg border border-border p-3"
+              missingBehavior="placeholder"
+            />
+          </Suspense>
+        ) : null}
       </nav>
     </aside>
   );

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { ensureCodexSkillsInjected } from "@paperclipai/adapter-codex-local/server";
+import { ensureCodexSkillsInjected, ensureCuratedGstackSidecar } from "@paperclipai/adapter-codex-local/server";
 
 async function makeTempDir(prefix: string): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -28,6 +28,13 @@ async function createCustomSkill(root: string, skillName: string) {
     `---\nname: ${skillName}\n---\n`,
     "utf8",
   );
+}
+
+async function createCuratedGstackRoot(root: string) {
+  await fs.mkdir(path.join(root, ".agents", "skills", "gstack-office-hours"), { recursive: true });
+  await fs.mkdir(path.join(root, ".agents", "skills", "gstack"), { recursive: true });
+  await fs.writeFile(path.join(root, ".agents", "skills", "gstack-office-hours", "SKILL.md"), "---\nname: office-hours\n---\n", "utf8");
+  await fs.writeFile(path.join(root, ".agents", "skills", "gstack", "SKILL.md"), "---\nname: gstack\n---\n", "utf8");
 }
 
 describe("codex local adapter skill injection", () => {
@@ -169,6 +176,29 @@ describe("codex local adapter skill injection", () => {
     expect((await fs.lstat(path.join(skillsHome, "agent-browser"))).isSymbolicLink()).toBe(true);
     expect(await fs.realpath(path.join(skillsHome, "agent-browser"))).toBe(
       await fs.realpath(path.join(currentRepo, "skills", "agent-browser")),
+    );
+  });
+
+  it("injects the curated gstack sidecar into the target skills directory", async () => {
+    const gstackRoot = await makeTempDir("paperclip-codex-gstack-root-");
+    const skillsHome = await makeTempDir("paperclip-codex-skills-home-");
+    cleanupDirs.add(gstackRoot);
+    cleanupDirs.add(skillsHome);
+    await createCuratedGstackRoot(gstackRoot);
+
+    await ensureCuratedGstackSidecar(
+      {
+        curatedGstack: {
+          rootPath: gstackRoot,
+        },
+      },
+      path.join(skillsHome, "gstack"),
+      async () => {},
+    );
+
+    expect((await fs.lstat(path.join(skillsHome, "gstack"))).isSymbolicLink()).toBe(true);
+    expect(await fs.realpath(path.join(skillsHome, "gstack"))).toBe(
+      await fs.realpath(path.join(gstackRoot, ".agents", "skills", "gstack")),
     );
   });
 });
