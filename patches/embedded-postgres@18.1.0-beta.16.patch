@@ -1,4 +1,3 @@
-diff --git a/dist/index.js b/dist/index.js
 --- a/dist/index.js
 +++ b/dist/index.js
 @@ -23,7 +23,7 @@
@@ -10,7 +9,86 @@ diff --git a/dist/index.js b/dist/index.js
  // The default configuration options for the class
  const defaults = {
      databaseDir: path.join(process.cwd(), 'data', 'db'),
-@@ -133,7 +133,7 @@
+@@ -50,6 +50,44 @@
+         yield fs.chmod(filePath, stat.mode | BIN_PERMISSIONS);
+     }
+ });
++const pathExists = (filePath) => __awaiter(void 0, void 0, void 0, function* () {
++    try {
++        yield fs.access(filePath);
++        return true;
++    }
++    catch (_a) {
++        return false;
++    }
++});
++const stageNativeRuntime = (binaryPath) => __awaiter(void 0, void 0, void 0, function* () {
++    const nativeRoot = path.resolve(binaryPath, '..', '..');
++    const runtimeKey = crypto.createHash('sha1').update(nativeRoot).digest('hex');
++    const stagedRoot = path.resolve(tmpdir(), 'embedded-postgres-runtime', runtimeKey);
++    const stagedBinary = path.resolve(stagedRoot, 'bin', path.basename(binaryPath));
++    if (!(yield pathExists(stagedBinary))) {
++        yield fs.mkdir(path.dirname(stagedRoot), { recursive: true });
++        try {
++            yield fs.cp(nativeRoot, stagedRoot, { recursive: true, force: true });
++        }
++        catch (err) {
++            if (!(yield pathExists(stagedBinary))) {
++                throw err;
++            }
++        }
++    }
++    return stagedBinary;
++});
++const resolveRunnableBinaries = (postgres, initdb, isRootUser) => __awaiter(void 0, void 0, void 0, function* () {
++    const resolved = isRootUser
++        ? {
++            postgres: yield stageNativeRuntime(postgres),
++            initdb: yield stageNativeRuntime(initdb),
++        }
++        : { postgres, initdb };
++    yield ensureBinIsExecutable(resolved.postgres);
++    yield ensureBinIsExecutable(resolved.initdb);
++    return resolved;
++});
+ /**
+  * This will track instances of all current initialised clusters. We need this
+  * because we want to be able to shutdown any clusters when the script is exited.
+@@ -106,34 +144,31 @@
+                     throw new Error('Failed to create and initialize a new user on this system.');
+                 }
+             }
+-            // GUARD: Ensure that the data directory is owned by the created user
+-            if (this.options.createPostgresUser) {
+-                if (!('uid' in permissionIds)) {
+-                    throw new Error('Failed to retrieve the uid for the newly created user.');
+-                }
+-                // Create the data directory and have the user own it, so we
+-                // don't get any permission errors
++            // Ensure the data directory is writable by the postgres runtime user
++            if ('uid' in permissionIds && 'gid' in permissionIds) {
+                 yield fs.mkdir(this.options.databaseDir, { recursive: true });
+                 yield fs.chown(this.options.databaseDir, permissionIds.uid, permissionIds.gid);
+             }
++            else if (this.options.createPostgresUser) {
++                throw new Error('Failed to retrieve the uid for the newly created user.');
++            }
+             // Create a file on disk that contains the password in plaintext
+             const randomId = crypto.randomBytes(6).readUIntLE(0, 6).toString(36);
+             const passwordFile = path.resolve(tmpdir(), `pg-password-${randomId}`);
+             yield fs.writeFile(passwordFile, this.options.password + '\n');
+             // Make the files executable, in case they are not
+-            ensureBinIsExecutable(postgres);
+-            ensureBinIsExecutable(initdb);
++            const runnableBinaries = yield resolveRunnableBinaries(postgres, initdb, this.isRootUser);
+             // Initialize the database
+             yield new Promise((resolve, reject) => {
+                 var _a;
+-                const process = spawn(initdb, [
++                const process = spawn(runnableBinaries.initdb, [
+                     `--pgdata=${this.options.databaseDir}`,
+                     `--auth=${this.options.authMethod}`,
+                     `--username=${this.options.user}`,
                      `--pwfile=${passwordFile}`,
                      `--lc-messages=${LC_MESSAGES_LOCALE}`,
                      ...this.options.initdbFlags,
@@ -19,7 +97,27 @@ diff --git a/dist/index.js b/dist/index.js
                  // Connect to stderr, as that is where the messages get sent
                  (_a = process.stdout) === null || _a === void 0 ? void 0 : _a.on('data', (chunk) => {
                      // Parse the data as a string and log it
-@@ -177,7 +177,7 @@
+@@ -160,24 +195,24 @@
+      */
+     start() {
+         return __awaiter(this, void 0, void 0, function* () {
+-            const { postgres } = yield bin;
++            const { postgres, initdb } = yield bin;
+             // Optionally retrieve the uid and gid
+             const permissionIds = yield this.getUidAndGid()
+                 .catch(() => {
+                 throw new Error('Postgres cannot run as a root user. embedded-postgres could not find a postgres user to run as instead. Consider using the `createPostgresUser` option.');
+             });
+             // Make the file executable, in case it is not
+-            ensureBinIsExecutable(postgres);
++            const runnableBinaries = yield resolveRunnableBinaries(postgres, initdb, this.isRootUser);
+             yield new Promise((resolve, reject) => {
+                 var _a;
+                 // Spawn a postgres server
+-                this.process = spawn(postgres, [
++                this.process = spawn(runnableBinaries.postgres, [
+                     '-D',
+                     this.options.databaseDir,
                      '-p',
                      this.options.port.toString(),
                      ...this.options.postgresFlags,
